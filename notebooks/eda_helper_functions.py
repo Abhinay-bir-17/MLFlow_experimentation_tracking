@@ -16,6 +16,56 @@ from sklearn.compose import ColumnTransformer
 from wordcloud import WordCloud, STOPWORDS
 from IPython.display import display, HTML
 
+def my_cramers_v(data, var1, var2):
+    ct = pd.crosstab(data[var1], data[var2])
+    r, c = ct.shape
+    n = ct.values.sum()
+    chi2 = stats.chi2_contingency(ct)[0]
+    phi2 = chi2 / n
+
+    # Bias correction
+    phi2_corr = max(0, phi2 - ((r - 1) * (c - 1)) / (n - 1))
+    r_corr = r - ((r - 1) ** 2) / (n - 1)
+    c_corr = c - ((c - 1) ** 2) / (n - 1)
+
+    denom = min(c_corr - 1, r_corr - 1)
+    if denom <= 0:
+        return np.nan
+
+    v = np.sqrt(phi2_corr / denom)
+    return min(v, 1.0)  # Clamp to 1.0 max
+
+def my_plot_cramers_v_heatmap(df):
+    cat_cols = df.select_dtypes(include='object').columns.tolist()
+
+    if len(cat_cols) < 2:
+        print("❌ Not enough categorical features for Cramér's V heatmap.")
+        return
+
+    matrix = pd.DataFrame(index=cat_cols, columns=cat_cols, dtype=float)
+
+    for i, col1 in enumerate(cat_cols):
+        for j, col2 in enumerate(cat_cols):
+            if i >= j:  # Lower triangle and diagonal
+                matrix.loc[col1, col2] = my_cramers_v(df, col1, col2)
+            else:
+                matrix.loc[col1, col2] = np.nan
+
+    plt.figure(figsize=(10, 8))
+    sns.heatmap(
+        matrix,
+        annot=True,
+        cmap='YlGnBu',
+        fmt='.2f',
+        mask=np.triu(np.ones(matrix.shape, dtype=bool)),
+        square=True,
+        cbar_kws={"shrink": 0.75}
+    )
+    plt.title("Cramér’s V Heatmap (Categorical Features)")
+    plt.xticks(rotation=45, ha='right')
+    plt.tight_layout()
+    plt.show()
+
 
 def display_html(size=3, content="content"):
   display(HTML(f"<h{size}>{content}</h{size}>"))
